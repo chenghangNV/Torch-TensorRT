@@ -423,3 +423,24 @@ TEST(Converters, ATenLEScalarConvertsCorrectly) {
       return (%2))IR";
   pointwise_test_helper(graph, true, false, {5, 5});
 }
+
+TEST(Converters, ATenRemainderConvertsCorrectly) {
+  const auto graph = R"IR(
+      graph(%0 : Tensor, %1 : Tensor):
+        %2 : Tensor = aten::remainder(%0, %1)
+        return (%2))IR";
+  pointwise_test_helper(graph, false);
+  pointwise_test_helper(graph, false, false, {3, 4}, {4});
+  pointwise_test_helper(graph, false, false, {4}, {3, 4});
+  pointwise_test_helper(graph, false, true, {3, 4, 3}, {4, 3});
+  pointwise_test_helper(graph, false, true, {4, 3}, {3, 4, 3});
+}
+
+TEST(Converters, ATenRemainderWithScalarConvertsCorrectly) {
+  const auto graph = R"IR(
+      graph(%0 : Tensor):
+        %scalar : float = prim::Constant[value=2.4]()
+        %1 : Tensor = aten::remainder(%0, %scalar)
+        return (%1))IR";
+  pointwise_test_helper(graph, true);
+}

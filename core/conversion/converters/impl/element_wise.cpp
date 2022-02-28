@@ -793,7 +793,60 @@ auto element_wise_registrations TORCHTRT_UNUSED =
 
                     LOG_DEBUG("Output tensor shape: " << out->getDimensions());
                     return true;
-                  }});
+                  }})
+        .pattern(
+            {"aten::remainder.Tensor(Tensor self, Tensor other) -> (Tensor)",
+             [](ConversionCtx* ctx, const torch::jit::Node* n, args& args) -> bool {
+               // Should implement self / other
+               auto self = args[0].ITensorOrFreeze(ctx);
+               auto other = args[1].ITensorOrFreeze(ctx);
+
+               auto floor = add_elementwise(
+                   ctx, nvinfer1::ElementWiseOperation::kFLOOR_DIV, self, other, util::node_info(n) + "_floor");
+               auto prod = add_elementwise(
+                   ctx,
+                   nvinfer1::ElementWiseOperation::kPROD,
+                   floor->getOutput(0),
+                   other,
+                   util::node_info(n) + "_prod");
+               auto remainder = add_elementwise(
+                   ctx, nvinfer1::ElementWiseOperation::kSUB, self, prod->getOutput(0), util::node_info(n) + "_sub");
+
+               TORCHTRT_CHECK(remainder, "Unable to create remainder layer from node: " << *n);
+
+               remainder->setName(util::node_info(n).c_str());
+               auto out = ctx->AssociateValueAndTensor(n->outputs()[0], remainder->getOutput(0));
+
+               LOG_DEBUG("Output tensor shape: " << out->getDimensions());
+               return true;
+             }})
+        .pattern(
+            {"aten::remainder.Scalar(Tensor self, Scalar other) -> (Tensor)",
+             [](ConversionCtx* ctx, const torch::jit::Node* n, args& args) -> bool {
+               // Should implement self / other
+               auto self = args[0].ITensorOrFreeze(ctx);
+               auto otherScalar = args[1].unwrapToScalar().to<float>();
+               auto other = tensor_to_const(ctx, torch::tensor({otherScalar}));
+
+               auto floor = add_elementwise(
+                   ctx, nvinfer1::ElementWiseOperation::kFLOOR_DIV, self, other, util::node_info(n) + "_floor");
+               auto prod = add_elementwise(
+                   ctx,
+                   nvinfer1::ElementWiseOperation::kPROD,
+                   floor->getOutput(0),
+                   other,
+                   util::node_info(n) + "_prod");
+               auto remainder = add_elementwise(
+                   ctx, nvinfer1::ElementWiseOperation::kSUB, self, prod->getOutput(0), util::node_info(n) + "_sub");
+
+               TORCHTRT_CHECK(remainder, "Unable to create remainder layer from node: " << *n);
+
+               remainder->setName(util::node_info(n).c_str());
+               auto out = ctx->AssociateValueAndTensor(n->outputs()[0], remainder->getOutput(0));
+
+               LOG_DEBUG("Output tensor shape: " << out->getDimensions());
+               return true;
+             }});
 
 } // namespace
 } // namespace impl
